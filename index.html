@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ping Score">
+<meta name="theme-color" content="#121214">
+<title>Ping Score</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #121214;
+    --panel: #1d1d21;
+    --panel-2: #26262c;
+    --line: #34343c;
+    --text: #f2f2f4;
+    --muted: #9a9aa5;
+    --accent: #ffd23f;
+    --danger: #ff5a5f;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    touch-action: manipulation; overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  input { font: inherit; }
+  .view { display: none; min-height: 100%; }
+  .view.on { display: block; }
+
+  /* ---------- Page chrome (home / players / stats) ---------- */
+  .page {
+    max-width: 640px; margin: 0 auto;
+    padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(24px + var(--safe-b)) calc(16px + var(--safe-l));
+  }
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .top h1 { font-size: 28px; margin: 0; flex: 1; letter-spacing: -0.02em; }
+  .top .back { font-size: 17px; color: var(--accent); padding: 6px 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 28px 0 10px; font-weight: 600; }
+  .card { background: var(--panel); border-radius: 14px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .swatch { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+  .btn {
+    display: block; width: 100%; padding: 16px; border-radius: 14px; font-weight: 600; font-size: 17px;
+    background: var(--panel-2); text-align: center;
+  }
+  .btn.primary { background: var(--accent); color: #1a1a1a; }
+  .btn.danger { color: var(--danger); }
+  .btn:disabled { opacity: 0.35; }
+  .btn + .btn { margin-top: 10px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .btns .btn + .btn { margin-top: 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .empty { padding: 20px 16px; color: var(--muted); text-align: center; }
+  .link { color: var(--accent); }
+  .x { color: var(--muted); padding: 4px 8px; font-size: 18px; }
+
+  /* player picker chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px 10px 10px;
+    border-radius: 999px; background: var(--panel); border: 2px solid transparent;
+  }
+  .chip.sel { border-color: var(--text); }
+  .chip .tag { font-size: 11px; font-weight: 700; color: var(--muted); }
+  .vs-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0; }
+  .vs-preview div {
+    border-radius: 12px; padding: 14px 10px; text-align: center; font-weight: 700; min-height: 56px;
+    display: flex; flex-direction: column; justify-content: center; background: var(--panel);
+  }
+  .vs-preview small { font-weight: 500; opacity: 0.7; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* player editor */
+  .field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  .colors { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin: 14px 0; }
+  .colors button { aspect-ratio: 1; border-radius: 50%; border: 3px solid transparent; position: relative; }
+  .colors button.sel { border-color: var(--text); }
+  .colors button.taken::after {
+    content: ""; position: absolute; inset: 35%; border-radius: 50%; background: rgba(0,0,0,0.45);
+  }
+
+  /* stats table */
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 12px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  th:first-child, td:first-child { text-align: left; padding-left: 16px; }
+  th:last-child, td:last-child { padding-right: 16px; }
+  tr:last-child td { border-bottom: 0; }
+  td .who { display: flex; align-items: center; gap: 8px; }
+  .hist .row { align-items: flex-start; }
+  .hist .when { font-size: 12px; color: var(--muted); }
+  .hist .sets { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .w { font-weight: 700; }
+
+  /* ---------- Match scoreboard ---------- */
+  #match { position: fixed; inset: 0; min-height: 0; overflow: hidden; }
+  #match.on { display: flex; flex-direction: column; }
+  .bar {
+    flex: none; display: flex; align-items: center; gap: 8px;
+    padding: calc(6px + var(--safe-t)) calc(10px + var(--safe-r)) 6px calc(10px + var(--safe-l));
+    background: var(--bg); font-size: 14px;
+  }
+  .bar button { padding: 8px 10px; border-radius: 10px; background: var(--panel); }
+  .bar .mid { flex: 1; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .board { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; background: var(--bg); min-height: 0; }
+  .half {
+    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 12px 8px calc(12px + var(--safe-b)); min-width: 0; touch-action: manipulation;
+    transition: background-color 0.35s;
+  }
+  .half .name {
+    font-weight: 700; font-size: clamp(18px, 4.5vmin, 34px); max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px;
+  }
+  .half .pts {
+    font-weight: 800; font-size: clamp(110px, 42vmin, 340px); line-height: 1; letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums; margin: 2vmin 0;
+  }
+  .half .pts.pop { animation: pop 0.18s ease-out; }
+  .half .pts.drop { animation: drop 0.18s ease-out; }
+  @keyframes pop { from { transform: scale(1.12); } to { transform: scale(1); } }
+  @keyframes drop { from { transform: scale(0.88); opacity: 0.6; } to { transform: scale(1); opacity: 1; } }
+  .half .setline { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: clamp(14px, 3.4vmin, 22px); }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: clamp(12px, 3vmin, 20px); height: clamp(12px, 3vmin, 20px); border-radius: 50%; border: 2px solid currentColor; opacity: 0.85; }
+  .dot.on { background: currentColor; }
+  .side-flag { position: absolute; top: 10px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.55; font-weight: 700; }
+  .game-pt { position: absolute; bottom: calc(14px + var(--safe-b)); font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,0.22); }
+  .hint { position: absolute; left: 0; right: 0; bottom: calc(8px + var(--safe-b)); text-align: center; font-size: 12px; color: rgba(255,255,255,0.6); pointer-events: none; transition: opacity 0.6s; }
+
+  .overlay {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(10,10,12,0.78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    padding: 20px; z-index: 5;
+  }
+  .overlay.on { display: flex; }
+  .dialog { background: var(--panel); border-radius: 20px; padding: 24px; width: min(420px, 100%); text-align: center; }
+  .dialog .big { font-size: 26px; font-weight: 800; margin: 6px 0 4px; }
+  .dialog .score { font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 6px 0 2px; }
+  .dialog p { margin: 4px 0 18px; color: var(--muted); }
+  .dialog .who-band { height: 6px; border-radius: 3px; margin: 0 auto 14px; width: 60px; }
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<section id="home" class="view">
+  <div class="page">
+    <div class="top"><h1>🏓 Ping Score</h1></div>
+
+    <div id="resumeBox"></div>
+
+    <h2>New match <span class="small muted" style="text-transform:none;letter-spacing:0">· first pick starts on the left</span></h2>
+    <div id="picker" class="chips"></div>
+    <div class="vs-preview" id="vsPreview"></div>
+    <button class="btn primary" id="startBtn" disabled>Start match</button>
+
+    <div class="btns">
+      <button class="btn" data-go="players">Players</button>
+      <button class="btn" data-go="stats">Stats</button>
+    </div>
+    <p class="small muted" style="margin-top:22px;text-align:center">
+      Best of 3 sets · to 11, win by 2 · tap = +1 · double-tap = −1 · sides switch every set
+    </p>
+  </div>
+</section>
+
+<!-- PLAYERS -->
+<section id="players" class="view">
+  <div class="page">
+    <div class="top"><button class="back" data-go="home">‹ Back</button><h1>Players</h1></div>
+    <div class="card" id="playerList"></div>
+
+    <h2 id="editTitle">Add player</h2>
+    <input class="field" id="nameInput" placeholder="Name" maxlength="20" autocomplete="off" autocapitalize="words">
+    <div class="colors" id="colorGrid"></div>
+    <button class="btn primary" id="savePlayer">Add player</button>
+    <button class="btn" id="cancelEdit" style="display:none">Cancel</button>
+    <button class="btn danger" id="deletePlayer" style="display:none">Delete player</button>
+  </div>
+</section>
+
+<!-- STATS -->
+<section id="stats" class="view">
+  <div class="page">
+    <div class="top"><button class="back" data-go="home">‹ Back</button><h1>Stats</h1></div>
+    <div class="card"><div id="statsTable"></div></div>
+    <p class="small muted">G = games (matches) won–lost · S = sets won–lost · ordered by games won, then win %.</p>
+
+    <h2>Match history</h2>
+    <div class="card hist" id="history"></div>
+
+    <h2>Backup</h2>
+    <div class="btns">
+      <button class="btn" id="exportBtn">Export data</button>
+      <button class="btn" id="importBtn">Import data</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+    <p class="small muted">Stats live only on this phone. Export now and then so you don't lose them.</p>
+  </div>
+</section>
+
+<!-- MATCH -->
+<section id="match" class="view">
+  <div class="bar">
+    <button id="exitMatch">‹ Menu</button>
+    <div class="mid" id="setInfo"></div>
+    <button id="swapBtn" title="Swap sides">⇄</button>
+  </div>
+  <div class="board">
+    <div class="half" data-side="0">
+      <div class="side-flag">Left</div>
+      <div class="name"></div><div class="pts">0</div>
+      <div class="setline"><span>Sets</span><div class="dots"></div></div>
+      <div class="game-pt"></div>
+    </div>
+    <div class="half" data-side="1">
+      <div class="side-flag">Right</div>
+      <div class="name"></div><div class="pts">0</div>
+      <div class="setline"><span>Sets</span><div class="dots"></div></div>
+      <div class="game-pt"></div>
+    </div>
+  </div>
+  <div class="hint" id="hint">Tap your side for a point · double-tap to take one back</div>
+  <div class="overlay" id="overlay"><div class="dialog" id="dialog"></div></div>
+</section>
+
+<script>
+(() => {
+  const KEY = 'pingscore.v1';
+  const DOUBLE_MS = 300;
+  const PALETTE = [
+    '#e63946', '#f77f00', '#fcbf49', '#2a9d8f', '#06d6a0', '#3a86ff',
+    '#4361ee', '#8338ec', '#ff006e', '#ff8fab', '#8d6e63', '#adb5bd'
+  ];
+
+  // ---------- storage ----------
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; }
+  }
+  let db = load() || { players: [], matches: [], current: null };
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {}
+  }
+
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const player = id => db.players.find(p => p.id === id);
+
+  // Readable text on any player colour.
+  function inkFor(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map(v => {
+      v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return L > 0.36 ? '#141414' : '#ffffff';
+  }
+
+  // Name/colour for a match record, even if the player was deleted later.
+  function who(m, i) {
+    const p = player(m.p[i]);
+    return p ? { name: p.name, color: p.color } : { name: m.names[i], color: m.colors[i] };
+  }
+
+  // ---------- navigation ----------
+  function show(id) {
+    $$('.view').forEach(v => v.classList.toggle('on', v.id === id));
+    ({ home: renderHome, players: renderPlayers, stats: renderStats, match: renderMatch })[id]();
+    window.scrollTo(0, 0);
+    if (id === 'match') keepAwake(); else releaseAwake();
+  }
+  $$('[data-go]').forEach(b => b.addEventListener('click', () => show(b.dataset.go)));
+
+  // Keep the screen on during a match (iOS 16.4+, where supported).
+  let wake = null;
+  async function keepAwake() {
+    try { if (!wake && navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+  function releaseAwake() { try { wake && wake.release(); } catch (e) {} wake = null; }
+  // iOS drops the lock when the app goes to the background; take it again on return.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && $('#match').classList.contains('on')) { wake = null; keepAwake(); }
+  });
+
+  // ---------- home ----------
+  let picks = [];
+  function renderHome() {
+    picks = picks.filter(id => player(id));
+    const rb = $('#resumeBox');
+    if (db.current) {
+      const c = db.current;
+      const a = player(c.p[0]), b = player(c.p[1]);
+      const sw = setsWon(c);
+      rb.innerHTML = `
+        <h2>Match in progress</h2>
+        <div class="card"><div class="row">
+          <span class="swatch" style="background:${a.color}"></span>
+          <div class="grow"><b>${esc(a.name)}</b> ${sw[0]}–${sw[1]} <b>${esc(b.name)}</b>
+            <div class="small muted">Set ${c.sets.length + 1} · ${c.score[0]}–${c.score[1]}</div></div>
+          <span class="swatch" style="background:${b.color}"></span>
+        </div></div>
+        <div class="btns"><button class="btn primary" id="resumeBtn">Resume</button>
+        <button class="btn danger" id="discardBtn">Discard</button></div>`;
+      $('#resumeBtn').onclick = () => show('match');
+      $('#discardBtn').onclick = () => {
+        if (confirm('Discard the match in progress? It will not count in stats.')) {
+          db.current = null; save(); renderHome();
+        }
+      };
+    } else rb.innerHTML = '';
+
+    const pk = $('#picker');
+    if (!db.players.length) {
+      pk.innerHTML = `<div class="muted">No players yet. <button class="link" data-go2="players">Add players</button></div>`;
+      $('[data-go2]', pk).onclick = () => show('players');
+    } else {
+      pk.innerHTML = db.players.map(p => {
+        const k = picks.indexOf(p.id);
+        return `<button class="chip ${k >= 0 ? 'sel' : ''}" data-id="${p.id}">
+          <span class="swatch" style="background:${p.color}"></span>${esc(p.name)}
+          ${k >= 0 ? `<span class="tag">${k === 0 ? 'L' : 'R'}</span>` : ''}</button>`;
+      }).join('');
+      $$('.chip', pk).forEach(c => c.onclick = () => {
+        const id = c.dataset.id, k = picks.indexOf(id);
+        if (k >= 0) picks.splice(k, 1);
+        else { if (picks.length === 2) picks.shift(); picks.push(id); }
+        renderHome();
+      });
+    }
+
+    const vp = $('#vsPreview');
+    vp.innerHTML = [0, 1].map(i => {
+      const p = player(picks[i]);
+      const lab = i === 0 ? 'Left' : 'Right';
+      return p ? `<div style="background:${p.color};color:${inkFor(p.color)}"><small>${lab}</small>${esc(p.name)}</div>`
+               : `<div class="muted"><small>${lab}</small>—</div>`;
+    }).join('');
+    $('#startBtn').disabled = picks.length !== 2;
+  }
+  $('#startBtn').onclick = () => {
+    if (picks.length !== 2) return;
+    if (db.current && !confirm('A match is in progress. Discard it and start a new one?')) return;
+    startMatch(picks[0], picks[1]);
+  };
+
+  function startMatch(leftId, rightId) {
+    db.current = { id: uid(), p: [leftId, rightId], sets: [], score: [0, 0], leftIdx: 0, startedAt: Date.now() };
+    save();
+    hintShown = false;
+    show('match');
+  }
+
+  // ---------- players ----------
+  let editing = null, chosenColor = null;
+  function renderPlayers() {
+    const list = $('#playerList');
+    list.innerHTML = db.players.length ? db.players.map(p => `
+      <button class="row" style="width:100%;text-align:left" data-id="${p.id}">
+        <span class="swatch" style="background:${p.color}"></span>
+        <span class="grow">${esc(p.name)}</span><span class="muted">Edit ›</span>
+      </button>`).join('') : `<div class="empty">Add everyone in your group below.</div>`;
+    $$('[data-id]', list).forEach(r => r.onclick = () => startEdit(r.dataset.id));
+    if (!editing && !chosenColor) chosenColor = firstFreeColor();
+    renderColorGrid();
+    const ed = editing && player(editing);
+    $('#editTitle').textContent = ed ? `Edit ${ed.name}` : 'Add player';
+    $('#savePlayer').textContent = ed ? 'Save changes' : 'Add player';
+    $('#cancelEdit').style.display = ed ? '' : 'none';
+    $('#deletePlayer').style.display = ed ? '' : 'none';
+  }
+  function firstFreeColor() {
+    const used = new Set(db.players.map(p => p.color));
+    return PALETTE.find(c => !used.has(c)) || PALETTE[db.players.length % PALETTE.length];
+  }
+  function renderColorGrid() {
+    const used = new Set(db.players.filter(p => p.id !== editing).map(p => p.color));
+    const g = $('#colorGrid');
+    g.innerHTML = PALETTE.map(c =>
+      `<button style="background:${c}" data-c="${c}" class="${c === chosenColor ? 'sel' : ''} ${used.has(c) ? 'taken' : ''}"
+        aria-label="colour ${c}${used.has(c) ? ' (taken)' : ''}"></button>`).join('');
+    $$('button', g).forEach(b => b.onclick = () => { chosenColor = b.dataset.c; renderColorGrid(); });
+  }
+  function startEdit(id) {
+    const p = player(id);
+    editing = id; chosenColor = p.color; $('#nameInput').value = p.name;
+    renderPlayers();
+    $('#nameInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function resetEdit() { editing = null; chosenColor = null; $('#nameInput').value = ''; renderPlayers(); }
+  $('#savePlayer').onclick = () => {
+    const name = $('#nameInput').value.trim();
+    if (!name) { $('#nameInput').focus(); return; }
+    const clash = db.players.find(p => p.id !== editing && p.color === chosenColor);
+    if (clash && !confirm(`${clash.name} already uses this colour. Use it anyway?`)) return;
+    if (editing) Object.assign(player(editing), { name, color: chosenColor });
+    else db.players.push({ id: uid(), name, color: chosenColor });
+    save(); resetEdit();
+  };
+  $('#cancelEdit').onclick = resetEdit;
+  $('#deletePlayer').onclick = () => {
+    const p = player(editing);
+    if (db.current && db.current.p.includes(p.id)) { alert(`${p.name} is in the match in progress. Finish or discard it first.`); return; }
+    if (!confirm(`Delete ${p.name}? Their past matches stay in the history.`)) return;
+    db.players = db.players.filter(x => x.id !== p.id);
+    save(); resetEdit();
+  };
+
+  // ---------- match logic ----------
+  const setsWon = m => m.sets.reduce((a, s) => (a[s[0] > s[1] ? 0 : 1]++, a), [0, 0]);
+  const setWinner = s => (s[0] >= 11 || s[1] >= 11) && Math.abs(s[0] - s[1]) >= 2 ? (s[0] > s[1] ? 0 : 1) : -1;
+  // Player index (0/1 in m.p) sitting on screen side 0=left / 1=right.
+  const idxOnSide = (m, side) => side === 0 ? m.leftIdx : 1 - m.leftIdx;
+
+  let lastTap = { side: -1, t: 0 }, settleTimer = null, hintShown = false;
+
+  function onTap(side) {
+    const m = db.current;
+    if (!m || $('#overlay').classList.contains('on')) return;
+    const i = idxOnSide(m, side);
+    const now = performance.now();
+    let delta;
+    if (lastTap.side === side && now - lastTap.t < DOUBLE_MS) {
+      // Second tap of a double-tap: undo the +1 from the first tap, then take one off.
+      m.score[i] = Math.max(0, m.score[i] - 2);
+      lastTap = { side: -1, t: 0 };
+      delta = -1;
+    } else {
+      m.score[i]++;
+      lastTap = { side, t: now };
+      delta = 1;
+    }
+    save();
+    renderMatch(side, delta);
+    // Wait out the double-tap window before declaring a set, so a quick
+    // correction on game point doesn't end the set by mistake.
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(checkSetEnd, DOUBLE_MS + 30);
+    if (!hintShown) { hintShown = true; $('#hint').style.opacity = 0; }
+  }
+
+  function checkSetEnd() {
+    const m = db.current;
+    if (!m) return;
+    const w = setWinner(m.score);
+    if (w < 0) return;
+    const sw = setsWon(m); sw[w]++;
+    const winner = player(m.p[w]);
+    const matchOver = sw[w] === 2;
+    const scoreText = `${Math.max(...m.score)}–${Math.min(...m.score)}`;
+    openDialog(`
+      <div class="who-band" style="background:${winner.color}"></div>
+      <div class="muted">Set ${m.sets.length + 1}</div>
+      <div class="big">${esc(winner.name)} ${matchOver ? 'wins the match!' : 'takes the set'}</div>
+      <div class="score">${scoreText}</div>
+      <p>${matchOver ? `Sets ${Math.max(...sw)}–${Math.min(...sw)}` : `Sets ${esc(player(m.p[0]).name)} ${sw[0]}–${sw[1]} ${esc(player(m.p[1]).name)} · switch sides`}</p>
+      <button class="btn primary" id="dlgNext">${matchOver ? 'Save result' : 'Switch sides & next set'}</button>
+      <button class="btn" id="dlgUndo">Oops — undo last point</button>`);
+    $('#dlgUndo').onclick = () => { m.score[w]--; save(); closeDialog(); renderMatch(); };
+    $('#dlgNext').onclick = () => {
+      m.sets.push([...m.score]);
+      m.score = [0, 0];
+      m.leftIdx = 1 - m.leftIdx;
+      if (matchOver) finishMatch(w); else { save(); closeDialog(); renderMatch(); }
+    };
+  }
+
+  function finishMatch(w) {
+    const m = db.current;
+    const a = player(m.p[0]), b = player(m.p[1]);
+    db.matches.unshift({
+      id: m.id, at: Date.now(), p: m.p, names: [a.name, b.name], colors: [a.color, b.color],
+      sets: m.sets, winner: w
+    });
+    db.current = null;
+    save();
+    const sw = setsWon({ sets: db.matches[0].sets });
+    openDialog(`
+      <div class="who-band" style="background:${[a, b][w].color}"></div>
+      <div class="big">${esc([a, b][w].name)} wins ${sw[w]}–${sw[1 - w]}</div>
+      <p>${db.matches[0].sets.map(s => `${s[0]}–${s[1]}`).join(' · ')}</p>
+      <button class="btn primary" id="dlgRematch">Rematch</button>
+      <button class="btn" id="dlgHome">Menu</button>`);
+    // Rematch keeps the sides the players finished on.
+    const finalLeft = m.p[m.leftIdx], finalRight = m.p[1 - m.leftIdx];
+    $('#dlgRematch').onclick = () => { closeDialog(); startMatch(finalLeft, finalRight); };
+    $('#dlgHome').onclick = () => { closeDialog(); show('home'); };
+  }
+
+  function openDialog(html) { $('#dialog').innerHTML = html; $('#overlay').classList.add('on'); }
+  function closeDialog() { $('#overlay').classList.remove('on'); }
+
+  function renderMatch(animSide, delta) {
+    const m = db.current;
+    if (!m) { show('home'); return; }
+    const sw = setsWon(m);
+    $$('.half').forEach(h => {
+      const side = +h.dataset.side;
+      const i = idxOnSide(m, side);
+      const p = player(m.p[i]);
+      h.style.background = p.color;
+      h.style.color = inkFor(p.color);
+      $('.name', h).textContent = p.name;
+      const pts = $('.pts', h);
+      pts.textContent = m.score[i];
+      if (animSide === side) {
+        pts.classList.remove('pop', 'drop'); void pts.offsetWidth;
+        pts.classList.add(delta > 0 ? 'pop' : 'drop');
+      }
+      $('.dots', h).innerHTML = [0, 1].map(k => `<span class="dot ${k < sw[i] ? 'on' : ''}"></span>`).join('');
+      const o = m.score[1 - i], me = m.score[i];
+      const gp = me >= 10 && me > o;
+      const tag = $('.game-pt', h);
+      tag.textContent = gp ? (sw[i] === 1 ? 'Match point' : 'Set point') : '';
+      tag.style.display = gp ? '' : 'none';
+    });
+    const done = m.sets.map(s => {
+      // show completed sets from the left player's point of view
+      const l = s[m.leftIdx], r = s[1 - m.leftIdx];
+      return `${l}–${r}`;
+    });
+    $('#setInfo').textContent = `Set ${m.sets.length + 1}${done.length ? ' · ' + done.join('  ') : ''}`;
+    $('#hint').style.opacity = hintShown ? 0 : 1;
+  }
+
+  $$('.half').forEach(h => h.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    onTap(+h.dataset.side);
+  }));
+  $('#exitMatch').onclick = () => { clearTimeout(settleTimer); show('home'); };
+  $('#swapBtn').onclick = () => {
+    const m = db.current; if (!m) return;
+    m.leftIdx = 1 - m.leftIdx; save(); renderMatch();
+  };
+
+  // ---------- stats ----------
+  function renderStats() {
+    const S = {};
+    const row = (m, i) => {
+      const id = m.p[i];
+      if (!S[id]) S[id] = { id, ...who(m, i), mw: 0, ml: 0, sw: 0, sl: 0, pf: 0, pa: 0 };
+      return S[id];
+    };
+    db.matches.forEach(m => {
+      [0, 1].forEach(i => {
+        const r = row(m, i);
+        m.winner === i ? r.mw++ : r.ml++;
+        m.sets.forEach(s => {
+          s[i] > s[1 - i] ? r.sw++ : r.sl++;
+          r.pf += s[i]; r.pa += s[1 - i];
+        });
+      });
+    });
+    // Players with no games yet still appear.
+    db.players.forEach(p => { if (!S[p.id]) S[p.id] = { id: p.id, name: p.name, color: p.color, mw: 0, ml: 0, sw: 0, sl: 0, pf: 0, pa: 0 }; });
+    const pct = r => (r.mw + r.ml) ? r.mw / (r.mw + r.ml) : 0;
+    const rows = Object.values(S).sort((a, b) => b.mw - a.mw || pct(b) - pct(a) || (b.sw - b.sl) - (a.sw - a.sl));
+    $('#statsTable').innerHTML = rows.length ? `
+      <table><thead><tr><th>Player</th><th>G</th><th>S</th><th>Win %</th></tr></thead><tbody>
+      ${rows.map(r => `<tr>
+        <td><span class="who"><span class="swatch" style="background:${r.color}"></span>${esc(r.name)}</span></td>
+        <td><b>${r.mw}</b>–${r.ml}</td><td>${r.sw}–${r.sl}</td>
+        <td>${r.mw + r.ml ? Math.round(pct(r) * 100) + '%' : '—'}</td></tr>`).join('')}
+      </tbody></table>` : `<div class="empty">No players yet.</div>`;
+
+    const fmt = t => new Date(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    $('#history').innerHTML = db.matches.length ? db.matches.map(m => {
+      const a = who(m, 0), b = who(m, 1), sw = setsWon(m);
+      return `<div class="row">
+        <div class="grow">
+          <div class="when">${fmt(m.at)}</div>
+          <div><span class="${m.winner === 0 ? 'w' : ''}" style="color:${a.color}">●</span>
+            <span class="${m.winner === 0 ? 'w' : ''}">${esc(a.name)}</span>
+            <b>${sw[0]}–${sw[1]}</b>
+            <span class="${m.winner === 1 ? 'w' : ''}">${esc(b.name)}</span>
+            <span style="color:${b.color}">●</span></div>
+          <div class="sets">${m.sets.map(s => `${s[0]}–${s[1]}`).join(' · ')}</div>
+        </div>
+        <button class="x" data-del="${m.id}" aria-label="Delete match">✕</button>
+      </div>`;
+    }).join('') : `<div class="empty">No finished matches yet.</div>`;
+    $$('[data-del]').forEach(b => b.onclick = () => {
+      if (!confirm('Delete this match from the history and stats?')) return;
+      db.matches = db.matches.filter(m => m.id !== b.dataset.del);
+      save(); renderStats();
+    });
+  }
+
+  $('#exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ping-score-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  $('#importBtn').onclick = () => $('#importFile').click();
+  $('#importFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      if (!Array.isArray(d.players) || !Array.isArray(d.matches)) throw 0;
+      if (!confirm(`Replace everything on this phone with ${d.players.length} players and ${d.matches.length} matches from the file?`)) return;
+      db = { players: d.players, matches: d.matches, current: d.current || null };
+      save(); renderStats();
+    } catch (err) { alert('That file is not a Ping Score backup.'); }
+    e.target.value = '';
+  };
+
+  // ---------- home-screen icon (iOS needs a PNG) ----------
+  (function icon() {
+    const c = document.createElement('canvas'); c.width = c.height = 180;
+    const g = c.getContext('2d');
+    g.fillStyle = '#121214'; g.fillRect(0, 0, 180, 180);
+    g.fillStyle = '#e63946'; g.fillRect(0, 0, 90, 180);
+    g.fillStyle = '#3a86ff'; g.fillRect(90, 0, 90, 180);
+    g.fillStyle = '#fff'; g.font = 'bold 84px -apple-system, system-ui, sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('11', 90, 96);
+    const l = document.createElement('link'); l.rel = 'apple-touch-icon'; l.href = c.toDataURL('image/png');
+    document.head.appendChild(l);
+  })();
+
+  show(db.current ? 'match' : 'home');
+})();
+</script>
+</body>
+</html>
